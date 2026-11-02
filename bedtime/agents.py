@@ -1,31 +1,45 @@
-'''The four agents. Each is one model call with its own system prompt and effort level.'''
+'''
+The four agents. Each is one model call with its own system prompt and effort level.
+
+    analyze  request -> StoryBrief   (low effort: extraction and classification)
+    plan     brief   -> StoryPlan    (medium effort: six-beat outline)
+    write    outline -> story text   (medium effort: drafting and revising)
+    judge    story   -> Verdict      (high effort: careful, rubric-based review)
+
+Agents are stateless functions; the graph in `graph.py` decides when each runs.
+'''
 
 from . import prompts
 from .llm import call_model, parse_model
 from .schemas import StoryBrief, StoryPlan, Verdict
 
 
-def _story_context(request: str, brief: StoryBrief, feedback: list[str]) -> str:
-    feedback_block = prompts.FEEDBACK.format(items='\n'.join(f'- {f}' for f in feedback)) if feedback else ''
-    return prompts.STORY_CONTEXT.format(request=request, brief=brief.model_dump_json(indent=2), feedback=feedback_block)
-
-
 def analyze(request: str) -> StoryBrief:
-    return parse_model(
-        prompts.ANALYZER_USER.format(request=request),
-        system=prompts.ANALYZER_SYSTEM,
-        schema=StoryBrief,
-        max_tokens=2000,
-        effort='low',
-    )
+    '''
+    Request Analyzer: turns a free-form request into a structured, child-safe brief.
+
+    Picks the story category, keeps the details the user asked for, and softens anything
+    unsuitable for ages 5-10 instead of refusing.
+    '''
+    return parse_model(prompts.ANALYZER_USER.format(request=request),
+                       system=prompts.ANALYZER_SYSTEM,
+                       schema=StoryBrief,
+                       max_tokens=2000,
+                       effort='low')
+
+def _story_context(request: str, brief: StoryBrief, feedback: list[str]) -> str:
+    '''Renders the shared context for planner, storyteller and judge: request, brief and any user feedback.'''
+    feedback_block = prompts.FEEDBACK.format(items='\n'.join(f'- {f}' for f in feedback)) if feedback else ''
+    return prompts.STORY_CONTEXT.format(request=request,
+                                        brief=brief.model_dump_json(indent=2),
+                                        feedback=feedback_block)
 
 
 def plan(request: str, brief: StoryBrief) -> StoryPlan:
+    '''Planner: outlines the story as six beats, using the strategy for the brief's category.'''
     return parse_model(
-        prompts.PLANNER_USER.format(
-            context=_story_context(request, brief, []),
-            strategy=prompts.CATEGORY_STRATEGIES[brief.category],
-        ),
+        prompts.PLANNER_USER.format(context=_story_context(request, brief, []),
+                                    strategy=prompts.CATEGORY_STRATEGIES[brief.category]),
         system=prompts.PLANNER_SYSTEM,
         schema=StoryPlan,
         max_tokens=3000,
@@ -41,7 +55,19 @@ def write(
     draft: str | None = None,
     notes: str | None = None,
 ) -> str:
-    '''Write a first draft, or revise `draft` according to `notes` when both are given.'''
+    '''Storyteller: writes a new draft, or revises `draft` according to `notes` when both are given.
+
+    Args:
+        request: The user's original request.
+        brief: The analyzer's brief.
+        outline: The planner's beats, followed beat by beat.
+        feedback: User change requests so far; these take priority over the brief.
+        draft: The story to revise, if this is a revision.
+        notes: What the revision must fix (judge notes or a user request).
+
+    Returns:
+        The story as plain text: a title line, a blank line, then the story.
+    '''
     task = prompts.STORYTELLER_REVISE.format(notes=notes, draft=draft) if draft and notes else prompts.STORYTELLER_WRITE
     prompt = prompts.STORYTELLER_USER.format(
         context=_story_context(request, brief, feedback),
@@ -55,6 +81,10 @@ def write(
 
 
 def judge(request: str, brief: StoryBrief, feedback: list[str], story: str) -> Verdict:
+    '''Judge: score a story against the rubric, with evidence and a concrete fix per criterion.
+
+    Safety is a separate pass/fail gate; see `Verdict.passed` for the acceptance rule.
+    '''
     # The judge sees what was asked for and the story, never the storyteller's prompt or outline,
     # so it grades the result rather than the intent.
     return parse_model(

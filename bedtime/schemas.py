@@ -1,16 +1,22 @@
-'''Structured outputs exchanged between the agents.'''
+'''
+Structured outputs exchanged between the agents, and the judge's acceptance rule.
+
+The agent models (StoryBrief, StoryPlan, Verdict) are passed to the API as structured-output
+schemas, so their class docstrings and Field descriptions are sent to the model as instructions.
+'''
 
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# The story categories the analyzer chooses from; each maps to a strategy in `prompts.CATEGORY_STRATEGIES`.
 Category = Literal['calm_bedtime', 'adventure', 'funny', 'friendship_feelings', 'curious_learning']
 
 PASS_SCORE = 8  # every criterion must reach this for the judge to accept a draft
 
 
 class StoryBrief(BaseModel):
-    '''What the Request Analyzer extracts from the user's request.'''
+    '''Output schema for Request Analyzer: agent extracts these fields from the user's request, softening anything unsuitable for ages 5-10 with safety notes.'''
 
     category: Category
     characters: list[str] = Field(description='Named characters with one short descriptor each, e.g. "Bob, a curious cat"')
@@ -22,7 +28,7 @@ class StoryBrief(BaseModel):
 
 
 class StoryPlan(BaseModel):
-    '''The Planner's beat outline.'''
+    '''Output schema for Story Planner: a six-beat outline with a title and the story's heart.'''
 
     title: str
     heart: str = Field(description='The gentle idea the story leaves the child with, in one sentence')
@@ -30,13 +36,15 @@ class StoryPlan(BaseModel):
 
 
 class CriterionScore(BaseModel):
+    '''The judge's score for one rubric criterion.'''
+
     score: int = Field(description='1-10, using the rubric anchors')
     evidence: str = Field(description='A short quote or specific reference from the story that justifies the score')
     fix: str = Field(description='One concrete instruction to improve this criterion, or "" if the score is 9 or 10')
 
 
 class Verdict(BaseModel):
-    '''The Judge's assessment of one draft.'''
+    '''Output schema for Story Judge: whether the draft is safe and meets the rubric criteria, with notes.'''
 
     safety_pass: bool = Field(description='False if anything is frightening, violent, unkind, or models unsafe behaviour')
     safety_issue: str = Field(description='What must change for safety, or "" if safety_pass is true')
@@ -47,6 +55,7 @@ class Verdict(BaseModel):
     bedtime_tone: CriterionScore
 
     def scores(self) -> dict[str, CriterionScore]:
+        '''The five rubric criteria by name, in rubric order.'''
         return {
             'request_fit': self.request_fit,
             'story_arc': self.story_arc,
@@ -57,15 +66,22 @@ class Verdict(BaseModel):
 
     @property
     def average(self) -> float:
+        '''Mean score across the rubric criteria; used to rank drafts that did not pass.'''
         scores = self.scores()
         return sum(c.score for c in scores.values()) / len(scores)
 
     @property
     def passed(self) -> bool:
+        '''Accepted when the draft is safe and every criterion reaches PASS_SCORE.'''
         return self.safety_pass and all(c.score >= PASS_SCORE for c in self.scores().values())
 
     def revision_notes(self) -> str:
-        '''Fixes for every criterion short of excellent, weakest first.'''
+        '''
+        Format the judge's fixes as a bullet list for the storyteller.
+
+        Safety comes first, then every criterion scoring below 9, weakest first, so the storyteller
+        also polishes criteria that already pass.
+        '''
         notes = []
         if not self.safety_pass:
             notes.append(f'- [SAFETY, must fix] {self.safety_issue}')

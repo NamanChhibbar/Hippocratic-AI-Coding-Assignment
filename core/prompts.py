@@ -4,6 +4,8 @@ System prompts and user-message templates for each agent, plus the per-category 
 
 from langchain_core.prompts import PromptTemplate
 
+from .configs import POLISH_SCORE
+
 
 # Shared by every system prompt
 AUDIENCE = (
@@ -173,7 +175,7 @@ Criteria:
 - language_level: easy for a 5-year-old to follow when read aloud, not babyish for a 10-year-old; sentence rhythm reads well aloud.
 - bedtime_tone: warm throughout and ends calm and cozy; the lesson is shown, not preached.
 
-For every criterion, quote or point to the specific passage behind your score. For any score below 9,
+For every criterion, quote or point to the specific passage behind your score. For any score below {POLISH_SCORE},
 give one concrete, actionable fix (what to change and where), not general advice.'''
 
 # Deliberately excludes the outline and storyteller instructions, so the judge grades only the result.

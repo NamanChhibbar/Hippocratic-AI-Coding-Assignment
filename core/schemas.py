@@ -9,10 +9,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from .configs import PASS_SCORE, POLISH_SCORE
+
 # The story categories the analyzer chooses from; each maps to a strategy in `prompts.CATEGORY_STRATEGIES`.
 Category = Literal['calm_bedtime', 'adventure', 'funny', 'friendship_feelings', 'curious_learning']
-
-PASS_SCORE = 8  # every criterion must reach this for the judge to accept a draft
 
 
 class StoryBrief(BaseModel):
@@ -40,7 +40,7 @@ class CriterionScore(BaseModel):
 
     score: int = Field(description='1-10, using the rubric anchors')
     evidence: str = Field(description='A short quote or specific reference from the story that justifies the score')
-    fix: str = Field(description='One concrete instruction to improve this criterion, or "" if the score is 9 or 10')
+    fix: str = Field(description=f'One concrete instruction to improve this criterion, or "" if the score is {POLISH_SCORE} or higher')
 
 
 class Verdict(BaseModel):
@@ -79,13 +79,13 @@ class Verdict(BaseModel):
         '''
         Format the judge's fixes as a bullet list for the storyteller.
 
-        Safety comes first, then every criterion scoring below 9, weakest first, so the storyteller
+        Safety comes first, then every criterion scoring below POLISH_SCORE, weakest first, so the storyteller
         also polishes criteria that already pass.
         '''
         notes = []
         if not self.safety_pass:
             notes.append(f'- [SAFETY, must fix] {self.safety_issue}')
-        weak = sorted((c.score, name, c) for name, c in self.scores().items() if c.score < 9 and c.fix)
+        weak = sorted((c.score, name, c) for name, c in self.scores().items() if c.score < POLISH_SCORE and c.fix)
         notes += [f'- [{name}, {score}/10] {c.fix}' for score, name, c in weak]
         return '\n'.join(notes)
 

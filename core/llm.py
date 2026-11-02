@@ -6,16 +6,12 @@ All model access goes through `call_model` (free text) and `parse_model` (struct
 
 import os
 from functools import cache
-from typing import Literal, TypeVar
+from typing import TypeVar
 
 import anthropic
 from pydantic import BaseModel
 
-MODEL = 'claude-haiku-5-5'
-
-# Haiku 5.5 rejects non-default temperature, so each role is tuned through
-# `effort` (how much the model reasons before answering) instead.
-Effort = Literal['low', 'medium', 'high']
+from .configs import MODEL, AgentConfig
 
 T = TypeVar('T', bound=BaseModel)
 
@@ -47,15 +43,14 @@ def _check(resp) -> None:
         raise ModelError('The response was cut off (max_tokens reached).')
 
 
-def call_model(prompt: str, system: str, max_tokens: int = 3000, effort: Effort = 'medium') -> str:
+def call_model(prompt: str, system: str, config: AgentConfig) -> str:
     '''
     Send a single-turn request and return the model's text reply.
 
     Args:
         prompt: The user message.
         system: The system prompt that sets the agent's role.
-        max_tokens: Upper bound on output, including the model's reasoning.
-        effort: How much the model reasons before answering.
+        config: The agent's max_tokens and effort, from `configs`.
 
     Raises:
         ModelError: If the model refused or the reply was truncated.
@@ -64,15 +59,15 @@ def call_model(prompt: str, system: str, max_tokens: int = 3000, effort: Effort 
         model=MODEL,
         system=system,
         messages=[{'role': 'user', 'content': prompt}],
-        max_tokens=max_tokens,
-        output_config={'effort': effort},
+        max_tokens=config.max_tokens,
+        output_config={'effort': config.effort},
     )
     _check(resp)
     # the response may also contain thinking blocks; return only the text
     return ''.join(block.text for block in resp.content if block.type == 'text').strip()
 
 
-def parse_model(prompt: str, system: str, schema: type[T], max_tokens: int = 3000, effort: Effort = 'medium') -> T:
+def parse_model(prompt: str, system: str, schema: type[T], config: AgentConfig) -> T:
     '''
     Like call_model, but the reply is constrained to `schema` and returned validated.
 
@@ -86,8 +81,8 @@ def parse_model(prompt: str, system: str, schema: type[T], max_tokens: int = 300
         model=MODEL,
         system=system,
         messages=[{'role': 'user', 'content': prompt}],
-        max_tokens=max_tokens,
-        output_config={'effort': effort},
+        max_tokens=config.max_tokens,
+        output_config={'effort': config.effort},
         output_format=schema,
     )
     # check the stop reason first: a refusal or truncation also leaves parsed_output empty

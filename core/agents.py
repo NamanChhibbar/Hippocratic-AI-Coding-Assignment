@@ -1,15 +1,16 @@
 '''
-The four agents. Each is one model call with its own system prompt and effort level.
+The four agents. Each is one model call with its own system prompt and generation settings
+(max_tokens and effort, defined per agent in `configs.py`).
 
-    analyze  request -> StoryBrief   (low effort: extraction and classification)
-    plan     brief   -> StoryPlan    (medium effort: six-beat outline)
-    write    outline -> story text   (medium effort: drafting and revising)
-    judge    story   -> Verdict      (high effort: careful, rubric-based review)
+    analyze  request -> StoryBrief
+    plan     brief   -> StoryPlan
+    write    outline -> story text
+    judge    story   -> Verdict
 
 Agents are stateless functions; the graph in `graph.py` decides when each runs.
 '''
 
-from . import prompts
+from . import configs, prompts
 from .llm import call_model, parse_model
 from .schemas import StoryBrief, StoryPlan, Verdict
 
@@ -24,8 +25,7 @@ def analyze(request: str) -> StoryBrief:
     return parse_model(prompts.ANALYZER_USER.format(request=request),
                        system=prompts.ANALYZER_SYSTEM,
                        schema=StoryBrief,
-                       max_tokens=2000,
-                       effort='low')
+                       config=configs.ANALYZER)
 
 def _story_context(request: str, brief: StoryBrief, feedback: list[str]) -> str:
     '''Renders the shared context for planner, storyteller and judge: request, brief and any user feedback.'''
@@ -42,8 +42,7 @@ def plan(request: str, brief: StoryBrief) -> StoryPlan:
                                     strategy=prompts.CATEGORY_STRATEGIES[brief.category]),
         system=prompts.PLANNER_SYSTEM,
         schema=StoryPlan,
-        max_tokens=3000,
-        effort='medium',
+        config=configs.PLANNER,
     )
 
 
@@ -77,7 +76,7 @@ def write(
         beats='\n'.join(f'{i}. {beat}' for i, beat in enumerate(outline.beats, 1)),
         task=task,
     )
-    return call_model(prompt, system=prompts.STORYTELLER_SYSTEM, max_tokens=8000, effort='medium')
+    return call_model(prompt, system=prompts.STORYTELLER_SYSTEM, config=configs.STORYTELLER)
 
 
 def judge(request: str, brief: StoryBrief, feedback: list[str], story: str) -> Verdict:
@@ -91,6 +90,5 @@ def judge(request: str, brief: StoryBrief, feedback: list[str], story: str) -> V
         prompts.JUDGE_USER.format(context=_story_context(request, brief, feedback), story=story),
         system=prompts.JUDGE_SYSTEM,
         schema=Verdict,
-        max_tokens=8000,
-        effort='high',
+        config=configs.JUDGE,
     )

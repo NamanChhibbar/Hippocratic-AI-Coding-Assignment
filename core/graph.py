@@ -21,11 +21,10 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from . import agents
+from .configs import MAX_ROUNDS
 from .schemas import Draft, StoryBrief, StoryPlan, best_draft
 
 log = logging.getLogger(__name__)
-
-MAX_ROUNDS = 3  # judge rounds per generation; bounds cost and latency
 
 
 class StoryState(TypedDict, total=False):

@@ -20,9 +20,25 @@ class ModelError(RuntimeError):
     '''Raised if the model declined the request, ran out of tokens, or returned unusable output.'''
 
 
+class MissingAPIKeyError(RuntimeError):
+    '''Raised if ANTHROPIC_API_KEY is not set.'''
+
+
+def require_api_key() -> None:
+    '''
+    Raise MissingAPIKeyError unless ANTHROPIC_API_KEY is set to a non-empty value.
+
+    Without this check, a missing key only surfaces at the first request, as a generic
+    TypeError from the SDK. An empty value (as in `.env.example`) counts as missing.
+    '''
+    if not os.environ.get('ANTHROPIC_API_KEY', '').strip():
+        raise MissingAPIKeyError('ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add your key.')
+
+
 @cache
 def _client() -> anthropic.Anthropic:
     '''Create the API client once.'''
+    require_api_key()
     # User-level keys (sk-ant-usr...) can act on several workspaces, so each request must name one.
     # Workspace-scoped keys (sk-ant-api...) don't need it; if sent, it must match the key's workspace.
     workspace_id = os.environ.get('ANTHROPIC_WORKSPACE_ID')

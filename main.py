@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
-from core import build_graph, ModelError
+from core import build_graph, MissingAPIKeyError, ModelError, require_api_key
 
 '''
 Before submitting the assignment, describe here in a few sentences what you would have built next if you spent 2 more hours on this project:
@@ -43,6 +43,7 @@ def main():
         logging.getLogger(noisy).setLevel(logging.WARNING)
     load_dotenv()  # Load .env
     try:
+        require_api_key()  # fail before asking for a story, not at the first model call
         user_input = input('What kind of story do you want to hear? ').strip() or example_requests
         # `config` passes the thread_id to the graph to restore state across interrupts
         config = RunnableConfig({'configurable': {'thread_id': 'session0'}})
@@ -54,10 +55,12 @@ def main():
             state = graph.invoke(Command(resume=feedback), config)
     except (KeyboardInterrupt, EOFError):
         print()
+    except MissingAPIKeyError as e:
+        sys.exit(str(e))
     except ModelError as e:
         sys.exit(f"Sorry, I couldn't finish the story: {e}")
     except anthropic.AnthropicError as e:
-        sys.exit(f'API error: {e}\nCheck that ANTHROPIC_API_KEY is set in .env.')
+        sys.exit(f'API error: {e}')
     # Ending note
     print('Sweet dreams!')
 

@@ -14,8 +14,7 @@ from dotenv import load_dotenv
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
-from bedtime.graph import build_graph
-from bedtime.llm import ModelError
+from core import build_graph, ModelError
 
 '''
 Before submitting the assignment, describe here in a few sentences what you would have built next if you spent 2 more hours on this project:

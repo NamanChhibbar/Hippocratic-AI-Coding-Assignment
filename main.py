@@ -19,6 +19,7 @@ from core import build_graph, MissingAPIKeyError, ModelError, require_api_key
 '''
 Before submitting the assignment, describe here in a few sentences what you would have built next if you spent 2 more hours on this project:
 
+An additional feature I would have built is a text-to-speech functionality that gives the user the option to dictate the story, with few warm and cozy voice options. This would enhance the user experience by also allowing them to listen to the story after generation.
 '''
 
 # Used when the user just presses Enter at the first prompt

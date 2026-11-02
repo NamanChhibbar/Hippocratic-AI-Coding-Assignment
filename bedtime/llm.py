@@ -1,5 +1,6 @@
 '''Thin wrapper around the Claude API shared by every agent.'''
 
+import os
 from functools import cache
 from typing import Literal, TypeVar
 
@@ -21,7 +22,11 @@ class ModelError(RuntimeError):
 
 @cache
 def _client() -> anthropic.Anthropic:
-    return anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
+    # User-level keys (sk-ant-usr...) can act on several workspaces, so each request must name one.
+    # Workspace-scoped keys (sk-ant-api...) don't need it; if sent, it must match the key's workspace.
+    workspace_id = os.environ.get('ANTHROPIC_WORKSPACE_ID')
+    headers = {'anthropic-workspace-id': workspace_id} if workspace_id else None
+    return anthropic.Anthropic(default_headers=headers)  # reads ANTHROPIC_API_KEY
 
 
 def _check(resp) -> None:
